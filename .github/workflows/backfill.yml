@@ -1,0 +1,33 @@
+name: hk-backfill
+# 港股日K增量回补: 港股通 ~2072 只, 每60分钟一批(300只), 完整轮回 ~7小时
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      batch:
+        description: "stocks per run"
+        default: "300"
+permissions:
+  contents: write
+concurrency:
+  group: hk-backfill
+  cancel-in-progress: false
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install pyarrow
+      - name: run
+        run: python hk_worker.py "${{ github.event.inputs.batch || '300' }}"
+      - name: commit
+        run: |
+          git config user.name "data-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add -A
+          git commit -m "hk-backfill $(date -u +%FT%TZ)" || echo "nothing to commit"
+          git push
